@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Mako SOP</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #000; color: #fff; font-family: -apple-system, sans-serif; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  #top-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: #111; flex-shrink: 0; gap: 10px; }
+  #counter { font-size: 14px; color: #ccc; white-space: nowrap; }
+  #progress-wrap { flex: 1; height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
+  #progress-fill { height: 100%; background: #2196F3; border-radius: 3px; transition: width 0.3s; }
+  #speed-wrap { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  #speed-val { font-size: 13px; color: #aaa; }
+  #speed { width: 70px; accent-color: #2196F3; }
+  #slide-area { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; touch-action: pan-y; }
+  #slide-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  #voice-status { text-align: right; padding: 4px 14px 2px; font-size: 12px; color: #666; flex-shrink: 0; }
+  #controls { display: flex; align-items: center; justify-content: center; gap: 18px; padding: 12px 0 20px; flex-shrink: 0; background: #111; }
+  .btn { width: 52px; height: 52px; border-radius: 50%; border: none; background: #2a2a2a; color: #fff; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+  .btn:active { background: #444; }
+  #play-btn { background: #2196F3; width: 60px; height: 60px; font-size: 24px; }
+  #voice-btn.active { background: #c62828; }
+</style>
+</head>
+<body>
+<div id="top-bar">
+  <div id="counter">1 / 45</div>
+  <div id="progress-wrap"><div id="progress-fill" style="width:2.2%"></div></div>
+  <div id="speed-wrap">
+    <span id="speed-val">8s</span>
+    <input id="speed" type="range" min="2" max="30" value="8">
+  </div>
+</div>
+<div id="slide-area">
+  <img id="slide-img" src="slides/01.jpg" alt="">
+</div>
+<div id="voice-status">🎙 tap to enable voice</div>
+<div id="controls">
+  <button class="btn" onclick="goTo(0)">⏮</button>
+  <button class="btn" onclick="prev()">◀</button>
+  <button class="btn" id="play-btn" onclick="togglePlay()">⏸</button>
+  <button class="btn" onclick="next()">▶▶</button>
+  <button class="btn" id="voice-btn" onclick="toggleVoice()">🎙</button>
+</div>
+<script>
+const TOTAL=45,img=document.getElementById('slide-img'),counter=document.getElementById('counter'),fill=document.getElementById('progress-fill'),playBtn=document.getElementById('play-btn'),voiceBtn=document.getElementById('voice-btn'),voiceStatus=document.getElementById('voice-status'),speedSlider=document.getElementById('speed'),speedVal=document.getElementById('speed-val');
+let current=0,playing=true,interval=null,speed=8,voiceOn=false,recognition=null,touchStartX=0,touchStartY=0;
+speedSlider.addEventListener('input',()=>{speed=parseInt(speedSlider.value);speedVal.textContent=speed+'s';if(playing)resetTimer();});
+function loadSlide(n){img.src='slides/'+String(n+1).padStart(2,'0')+'.jpg';counter.textContent=(n+1)+' / '+TOTAL;fill.style.width=((n+1)/TOTAL*100)+'%';current=n;}
+function goTo(n){n=Math.max(0,Math.min(TOTAL-1,n));loadSlide(n);if(playing)resetTimer();}
+function next(){if(current<TOTAL-1)goTo(current+1);else goTo(0);}
+function prev(){if(current>0)goTo(current-1);}
+function togglePlay(){playing=!playing;playBtn.textContent=playing?'⏸':'▶';if(playing)resetTimer();else clearInterval(interval);}
+function resetTimer(){clearInterval(interval);interval=setInterval(()=>{if(current<TOTAL-1)next();else{clearInterval(interval);playing=false;playBtn.textContent='▶';}},speed*1000);}
+const sa=document.getElementById('slide-area');
+sa.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;},{passive:true});
+sa.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-touchStartX,dy=e.changedTouches[0].clientY-touchStartY;if(Math.abs(dx)>40&&Math.abs(dx)>Math.abs(dy)){if(dx<0)next();else prev();}},{passive:true});
+function toggleVoice(){if(!voiceOn)startVoice();else stopVoice();}
+function startVoice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){voiceStatus.textContent='Voice not supported - use Safari';return;}if(!recognition){recognition=new SR();recognition.continuous=true;recognition.interimResults=false;recognition.lang='en-US';recognition.onresult=e=>{const t=e.results[e.results.length-1][0].transcript.trim().toLowerCase();if(/\b(pause|stop|hold)\b/.test(t)&&playing)togglePlay();else if(/\b(start|play|resume|go|continue)\b/.test(t)&&!playing)togglePlay();else if(/\b(next|forward)\b/.test(t))next();else if(/\b(back|previous|prev)\b/.test(t))prev();else if(/\b(restart|beginning)\b/.test(t))goTo(0);};recognition.onerror=e=>{if(e.error!='no-speech')voiceStatus.textContent='Voice error: '+e.error;};recognition.onend=()=>{if(voiceOn)setTimeout(()=>{try{recognition.start();}catch(e){}},300);};}try{recognition.start();voiceOn=true;voiceBtn.classList.add('active');voiceStatus.textContent='🔴 Listening - say next, back, pause, play...';}catch(e){voiceStatus.textContent='Could not start: '+e.message;}}
+function stopVoice(){voiceOn=false;if(recognition){try{recognition.stop();}catch(e){}}voiceBtn.classList.remove('active');voiceStatus.textContent='🎙 tap to enable voice';}
+loadSlide(0);playing=true;playBtn.textContent='⏸';resetTimer();
+</script>
+</body>
+</html>
